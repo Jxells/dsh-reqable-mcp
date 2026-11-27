@@ -14,6 +14,7 @@ let hookIndex = 0
 let currentInstance = null
 
 const React = {
+  Component: class Component { constructor(props) { this.props = props; this.state = {} } },
   createElement: (type, props, ...children) => ({ type, props: { ...(props ?? {}), children } }),
   useCallback: (fn) => fn,
   useState(initial) {
@@ -71,10 +72,26 @@ function mount(Component, props) {
   return instance
 }
 
-/** 假 describe 镜像：供卡片判断 secret 是否已设置。 */
+/**
+ * 假 describe 镜像。刻意写成「依赖 this 的类实例」：如果卡片把 getSnapshot/subscribe
+ * 裸引用传给 React（丢 this），这里会直接抛错，测试能挡住这种回归。
+ */
+class DescribeMirror {
+  constructor(namespaces) {
+    this.snapshot = { status: 'ready', view: { writable: true, hasDocument: true, namespaces }, error: null }
+  }
+
+  getSnapshot() { return this.snapshot }
+
+  subscribe() { return () => {} }
+
+  ensure() { return Promise.resolve() }
+
+  acceptView() {}
+}
+
 function stubDescribe(namespaces = []) {
-  const snapshot = { status: 'ready', view: { writable: true, hasDocument: true, namespaces }, error: null }
-  return { getSnapshot: () => snapshot, subscribe: () => () => {}, ensure: () => Promise.resolve(), acceptView() {} }
+  return new DescribeMirror(namespaces)
 }
 
 /** 一条命名空间视图，secrets 里带 path/set。 */
@@ -256,4 +273,17 @@ test('secret 未设置提示填入、已设置提示留空不改（且都不回�
   assert.notEqual(unset.placeholder, set.placeholder)
   assert.equal(unset.value, '', 'secret 永远不回填明文')
   assert.equal(set.value, '', 'secret 永远不回填明文')
+})
+
+test('错误边界兜底：渲染抛错时给一行报错而不是空白', async () => {
+  const { mod } = await loadClient()
+  assert.equal(typeof mod.CardBoundary, 'function', '必须导出 CardBoundary')
+  const derived = mod.CardBoundary.getDerivedStateFromError(new Error('boom'))
+  assert.equal(derived.error.message, 'boom')
+  const boundary = new mod.CardBoundary({ t: (key) => key, form: stubForm(mod.ENTRY_ID), describe: stubDescribe([]) })
+  boundary.state = derived
+  const tree = boundary.render()
+  const children = [].concat(tree.props.children).flat(Infinity).filter((child) => typeof child === 'string')
+  const message = children.join('')
+  assert.ok(message.includes('配置界面加载失败'), '兜底文案缺失：' + message)
 })

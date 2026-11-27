@@ -1,6 +1,6 @@
 {
   "name": "dsh-reqable-mcp",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "private": true,
   "description": "Reqable 抓包 MCP 接入：host/port/scope、mcp-server 路径与 token 都在插件设置里改，改完即时生效。",
   "type": "module",

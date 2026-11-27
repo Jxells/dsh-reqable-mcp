@@ -139,7 +139,16 @@ window.__ModuleLoader__.load({
       const getSnapshot = React.useCallback(() => form.getSnapshot(), [form])
       const snapshot = React.useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
       const face = props.describe
-      const mirror = React.useSyncExternalStore(face.subscribe, face.getSnapshot, face.getSnapshot)
+      // 注意：mirror 的方法依赖 this，必须包一层再交给 React，直接传引用会在渲染时炸掉整张卡片。
+      const subscribeDescribe = React.useCallback((listener) => face.subscribe(listener), [face])
+      const readDescribe = React.useCallback(() => {
+        try {
+          return face.getSnapshot()
+        } catch {
+          return EMPTY_MIRROR
+        }
+      }, [face])
+      const mirror = React.useSyncExternalStore(subscribeDescribe, readDescribe, readDescribe)
       const namespace = (mirror.view && mirror.view.namespaces ? mirror.view.namespaces : []).find((view) => view.ns === ENTRY_ID)
       const secretSet = (key) => (namespace && namespace.secrets ? namespace.secrets : []).some((entry) => entry.path.length === 1 && entry.path[0] === key && entry.set === true)
       const [draft, setDraft] = React.useState(() => draftFrom(snapshot.value))
@@ -212,6 +221,48 @@ window.__ModuleLoader__.load({
       )
     }
 
+
+
+    /**
+     * 卡片兜底：任何渲染期异常都退化成一行可读的报错，而不是让整块配置区消失。
+     * 用 React 的 class 组件写错误边界（函数组件没有 getDerivedStateFromError）。
+     */
+    class CardBoundary extends React.Component {
+      constructor(props) {
+        super(props)
+        this.state = { error: null }
+      }
+
+      static getDerivedStateFromError(error) {
+        return { error }
+      }
+
+      render() {
+        if (this.state.error !== null) {
+          return h('p', { role: 'alert', style: { fontSize: '12px', color: '#d4380d' } },
+            '配置界面加载失败：' + String((this.state.error && this.state.error.message) || this.state.error))
+        }
+        return h(ConfigCard, this.props)
+      }
+    }
+
+    /** 没有 describe 能力时的空镜像：卡片退化成「未设置」提示，不至于整块消失。 */
+    const EMPTY_MIRROR = { status: 'idle', view: undefined, error: null }
+
+    /**
+     * 取 secret 状态的镜像。取不到就返回一个空壳，卡片照常渲染。
+     * @param ctx - 客户端上下文。
+     * @returns describe 面（getSnapshot/subscribe）。
+     */
+    function describeFace(ctx) {
+      try {
+        if (typeof ctx.configForms.describe === 'function') return ctx.configForms.describe()
+      } catch {
+        // 老版本宿主没有 describe()：退化成空壳。
+      }
+      return { getSnapshot: () => EMPTY_MIRROR, subscribe: () => () => {}, ensure: () => Promise.resolve(), acceptView() {} }
+    }
+
     /** 需要的客户端服务。 */
     const inject = ['slots', 'locale', 'configForms']
 
@@ -224,11 +275,11 @@ window.__ModuleLoader__.load({
         name: 'plugins.bundle.config',
         key: BUNDLE,
         locale: NS,
-        inject: () => ({ form, describe: ctx.configForms.describe() }),
-      }, ConfigCard))
+        inject: () => ({ form, describe: describeFace(ctx) }),
+      }, CardBoundary))
     }
 
-    module.exports = { apply, inject, ConfigCard, draftFrom, buildOps, FIELDS, ENTRY_ID, BUNDLE }
+    module.exports = { apply, inject, ConfigCard, CardBoundary, draftFrom, buildOps, FIELDS, ENTRY_ID, BUNDLE }
     return module.exports
   },
 })

@@ -22,7 +22,7 @@ window.__ModuleLoader__.load({
     const BUNDLE = 'dsh-reqable-mcp'
 
     const zh = {
-      hint: '改完点保存即生效，不用重启。密钥留空表示不修改。',
+      hint: '改完点保存即生效，不用重启。密钥只写不读：保存后输入框永远是空的，留空即保持原值。',
       save: '保存',
       saving: '保存中…',
       saved: '已保存',
@@ -33,6 +33,7 @@ window.__ModuleLoader__.load({
       readOnly: '当前部署的设置为只读',
       empty: '未设置',
       secretHint: '已设置；留空表示不修改',
+      secretUnset: '未设置，填入后点保存',
       field_enabled: '启用',
       field_serverName: '工具命名空间',
       field_command: 'Reqable mcp-server 路径',
@@ -45,7 +46,7 @@ window.__ModuleLoader__.load({
     }
 
     const en = {
-      hint: 'Saved values apply immediately; no restart needed. Leave a secret empty to keep it.',
+      hint: 'Saved values apply immediately; no restart needed. Secrets are write-only: the box stays empty, and leaving it empty keeps the stored value.',
       save: 'Save',
       saving: 'Saving…',
       saved: 'Saved',
@@ -56,6 +57,7 @@ window.__ModuleLoader__.load({
       readOnly: 'Settings are read-only in this deployment',
       empty: 'not set',
       secretHint: 'set; leave empty to keep',
+      secretUnset: 'not set — type a value, then save',
       field_enabled: 'Enabled',
       field_serverName: 'Tool namespace',
       field_url: 'Qinglong URL',
@@ -136,6 +138,10 @@ window.__ModuleLoader__.load({
       const subscribe = React.useCallback((listener) => form.subscribe(listener), [form])
       const getSnapshot = React.useCallback(() => form.getSnapshot(), [form])
       const snapshot = React.useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+      const face = props.describe
+      const mirror = React.useSyncExternalStore(face.subscribe, face.getSnapshot, face.getSnapshot)
+      const namespace = (mirror.view && mirror.view.namespaces ? mirror.view.namespaces : []).find((view) => view.ns === ENTRY_ID)
+      const secretSet = (key) => (namespace && namespace.secrets ? namespace.secrets : []).some((entry) => entry.path.length === 1 && entry.path[0] === key && entry.set === true)
       const [draft, setDraft] = React.useState(() => draftFrom(snapshot.value))
       const [phase, setPhase] = React.useState('idle')
       const [error, setError] = React.useState('')
@@ -182,7 +188,7 @@ window.__ModuleLoader__.load({
             disabled: !writable,
             autoComplete: field.kind === 'secret' ? 'new-password' : 'off',
             placeholder: field.kind === 'secret'
-              ? (snapshot.value && snapshot.value[field.key] ? t('secretHint') : t('empty'))
+              ? (secretSet(field.key) ? t('secretHint') : t('secretUnset'))
               : '',
             onChange: (event) => setDraft({ ...draft, [field.key]: event.target.value }),
             style: inputStyle,
@@ -218,7 +224,7 @@ window.__ModuleLoader__.load({
         name: 'plugins.bundle.config',
         key: BUNDLE,
         locale: NS,
-        inject: () => ({ form }),
+        inject: () => ({ form, describe: ctx.configForms.describe() }),
       }, ConfigCard))
     }
 

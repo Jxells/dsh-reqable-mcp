@@ -71,6 +71,17 @@ function mount(Component, props) {
   return instance
 }
 
+/** 假 describe 镜像：供卡片判断 secret 是否已设置。 */
+function stubDescribe(namespaces = []) {
+  const snapshot = { status: 'ready', view: { writable: true, hasDocument: true, namespaces }, error: null }
+  return { getSnapshot: () => snapshot, subscribe: () => () => {}, ensure: () => Promise.resolve(), acceptView() {} }
+}
+
+/** 一条命名空间视图，secrets 里带 path/set。 */
+function namespaceView(ns, secrets) {
+  return { autoGenerate: true, ns, schema: {}, value: {}, base: {}, user: {}, applies: 'live', secrets, revision: 7 }
+}
+
 /** 假 cordis 客户端上下文。 */
 function stubCtx() {
   const registrations = []
@@ -82,7 +93,7 @@ function stubCtx() {
     ctx: {
       effect(fn) { effects.push(fn()) },
       locale: { register(ns, dictionaries) { localeNs = ns; assert.ok(dictionaries.zh, '缺少中文文案'); assert.ok(dictionaries.en, '缺少英文文案') } },
-      configForms: { get(id) { return stubForm(id) } },
+      configForms: { get(id) { return stubForm(id) }, describe() { return stubDescribe([]) } },
       slots: {
         inject(name, register) { register() },
         register(options, component) { registrations.push({ options, component }); return () => {} },
@@ -147,10 +158,11 @@ function walk(node, visit) {
 const collected = (tree) => { const nodes = []; walk(tree, (node) => nodes.push(node)); return nodes }
 
 /** 渲染卡片，返回 { form, tree }。 */
-function renderCard(mod) {
+function renderCard(mod, secrets = []) {
   const form = stubForm(mod.ENTRY_ID)
-  currentInstance = mount(mod.ConfigCard, { t: (key) => key, form })
-  return { form, get tree() { return currentInstance.tree } }
+  const describe = stubDescribe([namespaceView(mod.ENTRY_ID, secrets)])
+  currentInstance = mount(mod.ConfigCard, { t: (key) => key, form, describe })
+  return { form, describe, get tree() { return currentInstance.tree } }
 }
 
 test('模块 id 与包名一致，槽位注册参数正确', async () => {
@@ -178,7 +190,7 @@ test('卡片为每个字段渲染控件，secret 不回填明文', async () => {
   const byId = new Map(inputs.map((node) => [node.props.id, node.props]))
   const secretId = Array.from(byId.keys()).find((id) => id.endsWith('token'))
   assert.equal(byId.get(secretId).value, '', 'secret 必须以空值渲染')
-  assert.ok(String(byId.get(secretId).placeholder).includes('empty'), 'secret 应提示未设置')
+  assert.ok(String(byId.get(secretId).placeholder).includes('secretUnset'), 'secret 应提示未设置')
   assert.equal(byId.get('reqable-host').value, '127.0.0.1')
   assert.equal(byId.get('reqable-port').type, 'number')
   assert.equal(byId.get('reqable-startupTimeoutMs').type, 'number')
@@ -227,4 +239,21 @@ test('没有改动时不提交', async () => {
   const button = collected(card.tree).find((node) => node.type === 'button')
   await button.props.onClick()
   assert.equal(card.form.calls.length, 0)
+})
+
+test('secret 未设置提示填入、已设置提示留空不改（且都不回填明文）', async () => {
+  const { mod } = await loadClient()
+  const secretField = mod.FIELDS.find((field) => field.kind === 'secret')
+  assert.ok(secretField !== undefined, 'FIELDS 里必须有 secret 字段')
+  const placeholderOf = (tree) => {
+    const input = collected(tree).find((node) => node.type === 'input' && String(node.props.id).endsWith(secretField.key))
+    return { placeholder: String(input.props.placeholder), value: input.props.value }
+  }
+  const unset = placeholderOf(renderCard(mod, [{ path: [secretField.key], set: false }]).tree)
+  const set = placeholderOf(renderCard(mod, [{ path: [secretField.key], set: true }]).tree)
+  assert.ok(unset.placeholder.includes('secretUnset'), '未设置时应提示填入，实际：' + unset.placeholder)
+  assert.ok(set.placeholder.includes('secretHint'), '已设置时应提示留空不改，实际：' + set.placeholder)
+  assert.notEqual(unset.placeholder, set.placeholder)
+  assert.equal(unset.value, '', 'secret 永远不回填明文')
+  assert.equal(set.value, '', 'secret 永远不回填明文')
 })

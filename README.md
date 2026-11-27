@@ -30,7 +30,7 @@ dsh-reqable-mcp.apply(ctx, config) ──► ctx.mcpManager.register('reqable', 
 ```bash
 node scripts/install.mjs                 # 装进 web profile，并从旧版迁移 host/port/scope/token
 node scripts/install.mjs --profile tui
-node scripts/install.mjs --from git+https://github.com/USER/dsh-reqable-mcp.git
+node scripts/install.mjs --from git+https://github.com/Jxells/dsh-reqable-mcp.git
 ```
 
 装完重启一次 `dsh`（`~/dsh.sh`）；之后改设置不用再重启。

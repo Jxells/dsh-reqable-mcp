@@ -37,5 +37,9 @@
   "scripts": {
     "test": "node --test test/*.test.mjs"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Jxells/dsh-reqable-mcp.git"
+  }
 }

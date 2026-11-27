@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Reqable capture bridge",
+    "description": "Bridges Reqable's capture records, breakpoints, rewrites and script rules into the agent. Host, port, scope and token live in the plugin settings.",
+    "detail": "docs/DETAIL.md"
+  }
+}

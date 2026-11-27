@@ -1,0 +1,6 @@
+# dsh-reqable-mcp bundle 层：一行挂载插件的宿主半身。
+# 配置表单由宿主按本插件导出的 Config schema 自动生成，
+# 落在「插件」页面里这一行的配置区（命名空间就是下面的 id）。
+- insert:
+    - id: reqable-mcp
+      name: 'dsh-reqable-mcp'

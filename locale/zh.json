@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Reqable 抓包连接",
+    "description": "把本机（或局域网设备上）Reqable 的抓包记录、断点、重写、脚本等能力接入 Agent。连接参数在插件设置里改。",
+    "detail": "docs/DETAIL.md"
+  }
+}
